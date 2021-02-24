@@ -2,6 +2,9 @@ import ee
 import datetime
 import folium
 import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 # Define a method for displaying Earth Engine image tiles to folium map.
@@ -71,10 +74,13 @@ def select_data(dataset,data):
     dataout = dataset.select(data)
     return dataout
 
-def viualize_data(dataset):
-    print("this is your code: ")
-    print(dataset)
-
+def viualize_data(datalist,date):
+    plt.title("Precipation from " + str(date.item(0)) + ' to ' + str(date.item(len(date)-1)))
+    plt.xlabel("Dates")
+    plt.ylabel("Precipation")
+    plt.plot(date , datalist)
+    plt.savefig('test.png')
+    plt.show()
 
 
 def main():
@@ -102,7 +108,7 @@ def main():
     startDate = str(startYear)+'-'+startDay
     endDate = str(endYear+1)+'-'+endDay
 
-    list=[]
+    datalist=[]
 
     # Loops though the year listing daily totals
     for year in range(startYear , endYear):
@@ -116,8 +122,13 @@ def main():
         dataset = get_dataset(startDate,endDate)
         precipitation = select_data(dataset,'precipitation')
         temp=listDailyPrecipitationTotalsForYear(geoArea,precipitation)
-        list.append(temp)
-    print(temp)
+        datalist.append(temp)
+
+    #visualize the data
+    dates=np.arange(startDate , endDate , dtype='datetime64[D]')
+    print(type(datalist))
+    print(datalist)
+    viualize_data(datalist[0],dates)
 
 
 

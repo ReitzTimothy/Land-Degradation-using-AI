@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="1802f5b7-c919-48ce-955a-ef05788c92f6" name="Default Changelist" comment="Added a get data fucntion and select data fucntion to modulized it.">
+    <list default="true" id="1802f5b7-c919-48ce-955a-ef05788c92f6" name="Default Changelist" comment="unversion">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/FoliumPrecipitation.py" beforeDir="false" afterPath="$PROJECT_DIR$/FoliumPrecipitation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -26,6 +27,7 @@
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../pythonProject" />
   </component>
   <component name="RunManager">
     <configuration name="FoliumPrecipitation" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
@@ -65,7 +67,7 @@
       <option name="presentableId" value="Default" />
       <updated>1614173935562</updated>
       <workItem from="1614173937889" duration="4707000" />
-      <workItem from="1614179229017" duration="1729000" />
+      <workItem from="1614179229017" duration="9091000" />
     </task>
     <task id="LOCAL-00001" summary="Added a main function and added some setup to the readme text.">
       <created>1614175446335</created>
@@ -102,7 +104,21 @@
       <option name="project" value="LOCAL" />
       <updated>1614179321576</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Added a get data fucntion and select data fucntion to modulized it.">
+      <created>1614182975731</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1614182975731</updated>
+    </task>
+    <task id="LOCAL-00007" summary="unversion">
+      <created>1614183005067</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1614183005067</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -124,9 +140,10 @@
     <MESSAGE value="Added a main function and added some setup to the readme text." />
     <MESSAGE value="Added a get data fucntion to modulized it." />
     <MESSAGE value="Added a get data fucntion and select data fucntion to modulized it." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added a get data fucntion and select data fucntion to modulized it." />
+    <MESSAGE value="unversion" />
+    <option name="LAST_COMMIT_MESSAGE" value="unversion" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/Land_Degradation_using_AI$FoliumPrecipitation.coverage" NAME="FoliumPrecipitation Coverage Results" MODIFIED="1614182823056" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Land_Degradation_using_AI$FoliumPrecipitation.coverage" NAME="FoliumPrecipitation Coverage Results" MODIFIED="1614190578355" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
