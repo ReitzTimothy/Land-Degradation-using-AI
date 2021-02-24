@@ -15,8 +15,7 @@ def add_ee_layer(self, eeImageObject, visParams, name):
     control = True
   ).add_to(self)
 
-# Add EE drawing method to folium.
-folium.Map.add_ee_layer = add_ee_layer
+
 
 
 #create a folium map and save it to the same directory as the script
@@ -54,55 +53,61 @@ def getTotalPrecipitationForRegion(imlist, region, scale):
     
 #Iterate over each year and get total precipitation for region
 #TODO: make this output a 2d numpy array instead of printing to the console
-def listDailyPrecipitationTotalsForYearRange(startYear, endYear, region):
-    startDay = '01-01'
-    endDay = '01-01'
+def listDailyPrecipitationTotalsForYear(startYear,region,dataset):
 
-    for year in range(startYear, endYear):
-        print("Year: "+str(year))
-    
-        #Date range to filter dataset on
-        startDate = str(year)+'-'+startDay
-        endDate = str(year+1)+'-'+endDay
-        
-        #Get our dataset from earth engine and filter it on a date range
-        dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate, endDate));
-        precipitation = dataset.select('precipitation');
+    #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
+    datalist = dataset.toList(dataset.size())
 
-        #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
-        datalist = precipitation.toList(dataset.size())
+    #agregate the total rainfall for the area into a numpy where each entry is the aggreagate of the rainfall in each image in the list
+    totals = getTotalPrecipitationForRegion(datalist, region, 200)
+    for i in totals:
+        print(i)
 
-        #agregate the total rainfall for the area into a numpy where each entry is the aggreagate of the rainfall in each image in the list
-        totals = getTotalPrecipitationForRegion(datalist, region, 200)
-        for i in totals:
-            print(i)
+def get_dataset(startDate,endDate):
+    dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate , endDate))
+    return dataset
 
+def select_data(dataset,data):
+    dataout = dataset.select(data)
+    return dataout
+
+def viualize_data(dataset):
+    print("this is your code: ")
+    print(dataset)
 
 
 
-
-
-    
-
-
+def main():
 
 
 #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
 #ee.Authenticate()
-
+# Add EE drawing method to folium.
+    folium.Map.add_ee_layer = add_ee_layer
 #Initialize the earth engine API
-ee.Initialize()
+    ee.Initialize()
+
+
 
 
 
 #Geographic area to use
-geoArea = ee.Geometry.Rectangle(-79.55,12.43,-65.46,-4.86)
+    geoArea = ee.Geometry.Rectangle(-79.55,12.43,-65.46,-4.86)
 
 #Years to loop over and print data
-startYear = 1985
-endYear = 1990
+    startDay = '01-01'
+    endDay = '01-01'
+    startYear = 1989
+    endYear = 1990
+    startDate = str(startYear)+'-'+startDay
+    endDate = str(endYear+1)+'-'+endDay
 
-listDailyPrecipitationTotalsForYearRange(startYear, endYear, geoArea)
+
+    dataset=get_dataset(startDate,endDate)
+
+    for year in range(startYear, endYear):
+        print("Year: "+str(year))
+        listDailyPrecipitationTotalsForYear(year,geoArea,select_data(dataset,'precipitation'))
 
 
 
@@ -142,3 +147,6 @@ listDailyPrecipitationTotalsForYearRange(startYear, endYear, geoArea)
 
 # py_date = datetime.datetime.utcnow()
 # ee_date = ee.Date(py_date)
+
+if __name__ == '__main__':
+    main()
