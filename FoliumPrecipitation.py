@@ -1,6 +1,7 @@
 import ee
 import datetime
 import folium
+import numpy as np
 
 
 # Define a method for displaying Earth Engine image tiles to folium map.
@@ -18,6 +19,71 @@ def add_ee_layer(self, eeImageObject, visParams, name):
 folium.Map.add_ee_layer = add_ee_layer
 
 
+#create a folium map and save it to the same directory as the script
+def makeMapFromImage(filename, imageOverlay, layerName, startLoc, startZoom):
+    #Create a folium map centered on Columbia
+    m = folium.Map(location=startLoc,zoom_start=startZoom)
+
+    #Earth engine visualization parameters for the layer we will overlay on the map
+    visParams = {'palette':['D4394A', 'F66C45', 'FCAF62', 'FFE18B', 'E7F598', 'AADBA4','63C1A3', '3180BA'], 'gain':[.1], 'opacity':.8}
+
+    #mask overlay so that 0 values are not displayed
+    imageOverlay=imageOverlay.updateMask(imageOverlay)
+
+
+    #Overlay the image from the earth engine dataset on the folium map
+    m.add_ee_layer(imageOverlay, visParams, layerName)
+
+    # Add a layer control panel to the map.
+    m.add_child(folium.LayerControl())
+
+    #Save the map to an HTML file 
+    m.save(filename+".html")
+
+
+#Iterate over images in a list and output a numpy array of total precipitation in a specified region
+def getTotalPrecipitationForRegion(imlist, region, scale):
+    listSize = imlist.length().getInfo()
+    out = np.empty(shape=listSize)
+    for i in range(listSize):
+        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.mean(), geometry = region, scale = scale, maxPixels = 1e9);
+        out[i] = (tot.getInfo()['precipitation'])
+        if i%10 == 0:
+            print("aggregating precipitation ",i,"/",listSize)
+    return out
+    
+#Iterate over each year and get total precipitation for region
+#TODO: make this output a 2d numpy array instead of printing to the console
+def listDailyPrecipitationTotalsForYearRange(startYear, endYear, region):
+    startDay = '01-01'
+    endDay = '01-01'
+
+    for year in range(startYear, endYear):
+        print("Year: "+str(year))
+    
+        #Date range to filter dataset on
+        startDate = str(year)+'-'+startDay
+        endDate = str(year+1)+'-'+endDay
+        
+        #Get our dataset from earth engine and filter it on a date range
+        dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate, endDate));
+        precipitation = dataset.select('precipitation');
+
+        #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
+        datalist = precipitation.toList(dataset.size())
+
+        #agregate the total rainfall for the area into a numpy where each entry is the aggreagate of the rainfall in each image in the list
+        totals = getTotalPrecipitationForRegion(datalist, region, 200)
+        for i in totals:
+            print(i)
+
+
+
+
+
+
+    
+
 
 
 
@@ -29,48 +95,34 @@ ee.Initialize()
 
 
 
-
-
-
-#Date range to filter dataset on
-startDate = '2018-05-01'
-endDate = '2018-05-03'
 #Geographic area to use
 geoArea = ee.Geometry.Rectangle(-79.55,12.43,-65.46,-4.86)
 
+#Years to loop over and print data
+startYear = 1985
+endYear = 1990
+
+listDailyPrecipitationTotalsForYearRange(startYear, endYear, geoArea)
 
 
 
-
-#Get our dataset from earth engine and filter it on a date range
-dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate, endDate));
-precipitation = dataset.select('precipitation');
-
-#Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
-datalist = precipitation.toList(dataset.size())
-
-#Print the length of the list.  Our dataset is daily images so it should match the date range we filtered on
-print(len(datalist.getInfo()))
-
-#Create a folium map centered on Columbia
-m = folium.Map(location=[4.1156735, -72.9301367],zoom_start=5)
-
-#Earth engine visualization parameters for the layer we will overlay on the map
-visParams = {'palette':['D4394A', 'F66C45', 'FCAF62', 'FFE18B', 'E7F598', 'AADBA4','63C1A3', '3180BA'], 'gain':[.1], 'opacity':.8}
 
 #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
-precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
-precipitationOverlay=precipitationOverlay.updateMask(precipitationOverlay)
+#precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
+
+#make map out of the overlay
+#makeMapFromImage("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
 
 
-#Overlay the image from the earth engine dataset on the folium map
-m.add_ee_layer(precipitationOverlay, visParams, 'Precipitation')
 
-# Add a layer control panel to the map.
-m.add_child(folium.LayerControl())
 
-#Save the map to an HTML file 
-m.save("map.html")
+
+
+
+
+
+
+
 
 
 
