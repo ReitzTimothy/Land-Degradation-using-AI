@@ -53,15 +53,15 @@ def getTotalPrecipitationForRegion(imlist, region, scale):
     
 #Iterate over each year and get total precipitation for region
 #TODO: make this output a 2d numpy array instead of printing to the console
-def listDailyPrecipitationTotalsForYear(startYear,region,dataset):
+def listDailyPrecipitationTotalsForYear(region,dataset):
 
     #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
     datalist = dataset.toList(dataset.size())
 
     #agregate the total rainfall for the area into a numpy where each entry is the aggreagate of the rainfall in each image in the list
     totals = getTotalPrecipitationForRegion(datalist, region, 200)
-    for i in totals:
-        print(i)
+    return totals
+
 
 def get_dataset(startDate,endDate):
     dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate , endDate))
@@ -102,13 +102,22 @@ def main():
     startDate = str(startYear)+'-'+startDay
     endDate = str(endYear+1)+'-'+endDay
 
+    list=[]
 
-    dataset=get_dataset(startDate,endDate)
+    # Loops though the year listing daily totals
+    for year in range(startYear , endYear):
+        print("Year: " + str(year))
 
-    for year in range(startYear, endYear):
-        print("Year: "+str(year))
-        listDailyPrecipitationTotalsForYear(year,geoArea,select_data(dataset,'precipitation'))
+        # Date range to filter dataset on
+        startDate = str(year) + '-' + startDay
+        endDate = str(year + 1) + '-' + endDay
 
+        # Get our dataset from earth engine and filter it on a date range
+        dataset = get_dataset(startDate,endDate)
+        precipitation = select_data(dataset,'precipitation')
+        temp=listDailyPrecipitationTotalsForYear(geoArea,precipitation)
+        list.append(temp)
+    print(temp)
 
 
 
