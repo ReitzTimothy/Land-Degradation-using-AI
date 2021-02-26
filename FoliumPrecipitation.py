@@ -15,11 +15,12 @@ def add_ee_layer(self, eeImageObject, visParams, name):
     control = True
   ).add_to(self)
 
-
+# Add EE drawing method to folium.
+folium.Map.add_ee_layer = add_ee_layer
 
 
 #create a folium map and save it to the same directory as the script
-def makeMapFromImage(filename, imageOverlay, layerName, startLoc, startZoom):
+def make_map_from_image(filename, imageOverlay, layerName, startLoc, startZoom):
     #Create a folium map centered on Columbia
     m = folium.Map(location=startLoc,zoom_start=startZoom)
 
@@ -41,7 +42,7 @@ def makeMapFromImage(filename, imageOverlay, layerName, startLoc, startZoom):
 
 
 #Iterate over images in a list and output a numpy array of total precipitation in a specified region
-def getTotalPrecipitationForRegion(imlist, region, scale):
+def get_total_precipitation_for_region(imlist, region, scale):
     listSize = imlist.length().getInfo()
     out = np.empty(shape=listSize)
     for i in range(listSize):
@@ -51,16 +52,36 @@ def getTotalPrecipitationForRegion(imlist, region, scale):
             print("aggregating precipitation ",i,"/",listSize)
     return out
     
-#Iterate over each year and get total precipitation for region
-#TODO: make this output a 2d numpy array instead of printing to the console
-def listDailyPrecipitationTotalsForYear(region,dataset):
+#Iterate over each year and get total precipitation for region.  For leap years the last day is truncated
+def list_daily_precipitation_totals_for_year_range(startYear, endYear, region):
+    startDay = '01-01'
+    endDay = '01-01'
+    
+    output = np.empty([endYear-startYear, 365])
+    
+    for year in range(startYear, endYear):
+        print("Year: "+str(year))
 
-    #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
-    datalist = dataset.toList(dataset.size())
+        #Date range to filter dataset on
+        startDate = str(year)+'-'+startDay
+        endDate = str(year+1)+'-'+endDay
 
-    #agregate the total rainfall for the area into a numpy where each entry is the aggreagate of the rainfall in each image in the list
-    totals = getTotalPrecipitationForRegion(datalist, region, 200)
-    return totals
+        #Get our dataset from earth engine and filter it on a date range
+        dataset = get_dataset(startDate, endDate);
+        precipitation = dataset.select('precipitation');
+        
+
+        #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
+        datalist = precipitation.toList(dataset.size())
+        
+        #truncate the last item if its a leap year
+        if datalist.length().getInfo() > 365:
+            datalist = datalist.remove(datalist.get(365))
+
+        #agregate the total rainfall for the area into a numpy array
+        output[year-startYear] = get_total_precipitation_for_region(datalist, region, 200)
+        
+    return output
 
 
 def get_dataset(startDate,endDate):
@@ -80,52 +101,37 @@ def viualize_data(dataset):
 def main():
 
 
-#Get an authentication token from google, do every time if running on the cloud, do first time only if running local
-#ee.Authenticate()
-# Add EE drawing method to folium.
-    folium.Map.add_ee_layer = add_ee_layer
-#Initialize the earth engine API
+    #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
+    #ee.Authenticate()
+
+    #Initialize the earth engine API
     ee.Initialize()
 
 
 
 
 
-#Geographic area to use
+    #Geographic area to use
     geoArea = ee.Geometry.Rectangle(-79.55,12.43,-65.46,-4.86)
 
-#Years to loop over and print data
-    startDay = '01-01'
-    endDay = '01-01'
-    startYear = 1989
-    endYear = 1990
-    startDate = str(startYear)+'-'+startDay
-    endDate = str(endYear+1)+'-'+endDay
+    #Years to loop over and print data
+        
+    startYear = 2000
+    endYear = 2002
+    
+    precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea)
+    print(precipVals)
 
-    list=[]
+#Example of displaying data on a folium map    
+    #get the data for a single day
+    dataset = get_dataset('1989-02-01','1989-02-02')
+    datalist = dataset.toList(dataset.size())
 
-    # Loops though the year listing daily totals
-    for year in range(startYear , endYear):
-        print("Year: " + str(year))
+    #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
+    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
 
-        # Date range to filter dataset on
-        startDate = str(year) + '-' + startDay
-        endDate = str(year + 1) + '-' + endDay
-
-        # Get our dataset from earth engine and filter it on a date range
-        dataset = get_dataset(startDate,endDate)
-        precipitation = select_data(dataset,'precipitation')
-        temp=listDailyPrecipitationTotalsForYear(geoArea,precipitation)
-        list.append(temp)
-    print(temp)
-
-
-
-#Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
-#precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
-
-#make map out of the overlay
-#makeMapFromImage("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
+    #make map out of the overlay
+    make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
 
 
 
