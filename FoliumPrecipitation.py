@@ -46,7 +46,7 @@ def get_total_precipitation_for_region(imlist, region, scale):
     listSize = imlist.length().getInfo()
     out = np.empty(shape=listSize)
     for i in range(listSize):
-        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.mean(), geometry = region, scale = scale, maxPixels = 1e9);
+        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.sum(), geometry = region, scale = scale, maxPixels = 1e9);
         out[i] = (tot.getInfo()['precipitation'])
         if i%10 == 0:
             print("aggregating precipitation ",i,"/",listSize)
