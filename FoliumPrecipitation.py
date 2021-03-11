@@ -46,7 +46,7 @@ def get_total_precipitation_for_region(imlist, region, scale):
     listSize = imlist.length().getInfo()
     out = np.empty(shape=listSize)
     for i in range(listSize):
-        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.mean(), geometry = region, scale = scale, maxPixels = 1e9);
+        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.sum(), geometry = region, scale = scale, maxPixels = 1e9);
         out[i] = (tot.getInfo()['precipitation'])
         if i%10 == 0:
             print("aggregating precipitation ",i,"/",listSize)
@@ -128,7 +128,7 @@ def main():
     datalist = dataset.toList(dataset.size())
 
     #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
-    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
+    precipitationOverlay = ee.Image(datalist.get(0))
 
     #make map out of the overlay
     make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
