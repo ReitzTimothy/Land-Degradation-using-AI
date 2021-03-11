@@ -128,7 +128,7 @@ def main():
     datalist = dataset.toList(dataset.size())
 
     #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
-    precipitationOverlay = ee.Image(datalist.get(0))
+    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
 
     #make map out of the overlay
     make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
