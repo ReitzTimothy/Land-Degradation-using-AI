@@ -3,6 +3,80 @@ import datetime
 import folium
 import numpy as np
 import geemap
+import pandas as pd
+import tensorflow as tf
+
+
+
+
+#Geographic area to use for rectangular input
+geoArea = ee.Geometry.Rectangle(-80,13,-63,-5)
+#Scale to use when converting earth engine data into pixels (may be CHIRPS specific, IDK)
+imScale = 200
+
+
+
+
+def main():
+
+
+    #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
+    #ee.Authenticate()
+
+    #Initialize the earth engine API
+    ee.Initialize()
+
+        
+    
+    
+#Ex 1) Total up precipitation across the region and print it
+
+
+    #Years to loop over and print data
+    startYear = 2000
+    endYear = 2002
+
+    #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
+    #print(precipVals)
+
+
+
+
+#Ex 2) Displaying data on a folium map, in this case precipitation for a single day
+
+    #get the data for a single day
+    dataset = get_dataset('1989-02-01','1989-02-02')
+    datalist = dataset.toList(dataset.size())
+
+    #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
+    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
+
+    #make map out of the overlay
+    make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
+    
+    
+
+#Ex 3) Train a model to make predictions based on the previous day only
+    
+    #Load map data into numpy array for training
+    maps = get_precipitation_maps_for_range('1989-02-01', '1989-03-01', geoArea, imScale)
+
+    #Copy the data into input and expected output and put it in a dataframe
+    inp = np.empty(shape = (maps.shape[0], maps.shape[1], maps.shape[2]-1))
+    out = np.empty(shape = (maps.shape[0], maps.shape[1], maps.shape[2]-1))
+    data = []
+    
+    for i in range(maps.shape[2]-1):
+        inp[:,:,i] = maps[:,:,i]
+        out[:,:,i] = maps[:,:,i+1]
+        data.append({'input':inp[:,:,i], 'output':out[:,:,i]})
+    
+
+    dataframe = pd.DataFrame(data)
+    print(dataframe.shape)
+    
+    datagen = tf.keras.preprocessing.image.ImageDataGenerator(featurewise_std_normalization=true)
+    npItereator = tf.keras.preprocessing.image.NumpyArrayIterator(x=inp, y=out)
 
 
 # Define a method for displaying Earth Engine image tiles to folium map.
@@ -86,6 +160,7 @@ def list_daily_precipitation_totals_for_year_range(startYear, endYear, region, s
 
 #Get pixel values as numpy array from CHIRPS images for a certain date range
 def get_precipitation_maps_for_range(startDate, endDate, geoArea, scale):
+    print("Begin loading data from EE...")
     arrList = []
     data = get_dataset(startDate, endDate)
     l = data.toList(data.size())
@@ -98,6 +173,7 @@ def get_precipitation_maps_for_range(startDate, endDate, geoArea, scale):
         arrList.append(arr)
     
     output = np.concatenate(arrList, axis = 2)
+    print("Done")
     return output
 
 def get_dataset(startDate,endDate):
@@ -114,47 +190,9 @@ def viualize_data(dataset):
 
 
 
-def main():
 
-
-    #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
-    #ee.Authenticate()
-
-    #Initialize the earth engine API
-    ee.Initialize()
-
-
-
-
-
-    #Geographic area to use
-    geoArea = ee.Geometry.Rectangle(-80,13,-63,-5)
-
-    #Years to loop over and print data
-        
-    startYear = 2000
-    endYear = 2002
-    imScale = 200
-    
-    #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
-    #print(precipVals)
-
-#Example of displaying data on a folium map    
-    #get the data for a single day
-    dataset = get_dataset('1989-02-01','1989-02-02')
-    datalist = dataset.toList(dataset.size())
-
-    #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
-    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
-
-    #make map out of the overlay
-    make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
     
     
-    
-#Load map data into numpy array for training
-    maps = get_precipitation_maps_for_range('1989-02-01', '1989-02-03', geoArea, imScale)
-    print(maps.shape)
 
 
 
@@ -170,7 +208,6 @@ def main():
 
 #Things I still need to figure out
     #How to make a smooth gradient color transition instead of color pallette
-    #How to normalize the dataset ranges to be between 0 and 1
     #How to load the background map in grayscale to avoid polluting the overlay with green from forested areas while keeping opacity
 
 
