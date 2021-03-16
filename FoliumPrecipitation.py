@@ -2,6 +2,7 @@ import ee
 import datetime
 import folium
 import numpy as np
+import geemap
 
 
 # Define a method for displaying Earth Engine image tiles to folium map.
@@ -53,7 +54,7 @@ def get_total_precipitation_for_region(imlist, region, scale):
     return out
     
 #Iterate over each year and get total precipitation for region.  For leap years the last day is truncated
-def list_daily_precipitation_totals_for_year_range(startYear, endYear, region):
+def list_daily_precipitation_totals_for_year_range(startYear, endYear, region, scale):
     startDay = '01-01'
     endDay = '01-01'
     
@@ -79,10 +80,25 @@ def list_daily_precipitation_totals_for_year_range(startYear, endYear, region):
             datalist = datalist.remove(datalist.get(365))
 
         #agregate the total rainfall for the area into a numpy array
-        output[year-startYear] = get_total_precipitation_for_region(datalist, region, 200)
+        output[year-startYear] = get_total_precipitation_for_region(datalist, region, scale)
         
     return output
 
+#Get pixel values as numpy array from CHIRPS images for a certain date range
+def get_precipitation_maps_for_range(startDate, endDate, geoArea, scale):
+    arrList = []
+    data = get_dataset(startDate, endDate)
+    l = data.toList(data.size())
+    
+    
+    
+    for i in range(l.size().getInfo()):
+        im = ee.Image(l.get(i))
+        arr = geemap.ee_to_numpy(im,region = geoArea, default_value = 0)
+        arrList.append(arr)
+    
+    output = np.concatenate(arrList, axis = 2)
+    return output
 
 def get_dataset(startDate,endDate):
     dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate , endDate))
@@ -112,15 +128,16 @@ def main():
 
 
     #Geographic area to use
-    geoArea = ee.Geometry.Rectangle(-79.55,12.43,-65.46,-4.86)
+    geoArea = ee.Geometry.Rectangle(-80,13,-63,-5)
 
     #Years to loop over and print data
         
     startYear = 2000
     endYear = 2002
+    imScale = 200
     
-    precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea)
-    print(precipVals)
+    #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
+    #print(precipVals)
 
 #Example of displaying data on a folium map    
     #get the data for a single day
@@ -132,7 +149,12 @@ def main():
 
     #make map out of the overlay
     make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
-
+    
+    
+    
+#Load map data into numpy array for training
+    maps = get_precipitation_maps_for_range('1989-02-01', '1989-02-03', geoArea, imScale)
+    print(maps.shape)
 
 
 
