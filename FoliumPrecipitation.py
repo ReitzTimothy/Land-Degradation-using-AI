@@ -5,78 +5,29 @@ import numpy as np
 import geemap
 import pandas as pd
 import tensorflow as tf
+import Model
+import sklearn
+from sklearn.preprocessing import MinMaxScaler
 
+#Get an authentication token from google, do every time if running on the cloud, do first time only if running local
+#ee.Authenticate()
+
+#Initialize the earth engine API
+ee.Initialize()
 
 
 
 #Geographic area to use for rectangular input
-geoArea = ee.Geometry.Rectangle(-80,13,-63,-5)
+geoArea = ee.Geometry.Rectangle(-80,13,-62,-5)
 #Scale to use when converting earth engine data into pixels (may be CHIRPS specific, IDK)
 imScale = 200
 
 
 
 
-def main():
-
-
-    #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
-    #ee.Authenticate()
-
-    #Initialize the earth engine API
-    ee.Initialize()
-
-        
-    
-    
-#Ex 1) Total up precipitation across the region and print it
-
-
-    #Years to loop over and print data
-    startYear = 2000
-    endYear = 2002
-
-    #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
-    #print(precipVals)
 
 
 
-
-#Ex 2) Displaying data on a folium map, in this case precipitation for a single day
-
-    #get the data for a single day
-    dataset = get_dataset('1989-02-01','1989-02-02')
-    datalist = dataset.toList(dataset.size())
-
-    #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
-    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
-
-    #make map out of the overlay
-    make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
-    
-    
-
-#Ex 3) Train a model to make predictions based on the previous day only
-    
-    #Load map data into numpy array for training
-    maps = get_precipitation_maps_for_range('1989-02-01', '1989-03-01', geoArea, imScale)
-
-    #Copy the data into input and expected output and put it in a dataframe
-    inp = np.empty(shape = (maps.shape[0], maps.shape[1], maps.shape[2]-1))
-    out = np.empty(shape = (maps.shape[0], maps.shape[1], maps.shape[2]-1))
-    data = []
-    
-    for i in range(maps.shape[2]-1):
-        inp[:,:,i] = maps[:,:,i]
-        out[:,:,i] = maps[:,:,i+1]
-        data.append({'input':inp[:,:,i], 'output':out[:,:,i]})
-    
-
-    dataframe = pd.DataFrame(data)
-    print(dataframe.shape)
-    
-    datagen = tf.keras.preprocessing.image.ImageDataGenerator(featurewise_std_normalization=true)
-    npItereator = tf.keras.preprocessing.image.NumpyArrayIterator(x=inp, y=out)
 
 
 # Define a method for displaying Earth Engine image tiles to folium map.
@@ -168,6 +119,8 @@ def get_precipitation_maps_for_range(startDate, endDate, geoArea, scale):
     
     
     for i in range(l.size().getInfo()):
+        if i%100 == 0:
+            print(i)
         im = ee.Image(l.get(i))
         arr = geemap.ee_to_numpy(im,region = geoArea, default_value = 0)
         arrList.append(arr)
@@ -193,6 +146,94 @@ def viualize_data(dataset):
 
     
     
+
+
+
+
+
+
+def main():
+
+
+    
+
+        
+    
+    
+#Ex 1) Total up precipitation across the region and print it
+
+
+    #Years to loop over and print data
+    startYear = 2000
+    endYear = 2002
+
+    #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
+    #print(precipVals)
+
+
+
+
+#Ex 2) Displaying data on a folium map, in this case precipitation for a single day
+
+    #get the data for a single day
+    dataset = get_dataset('1989-02-01','1989-02-02')
+    datalist = dataset.toList(dataset.size())
+
+    #Create overlays for the images and clip them to the area we want to analyze (uses lat/long coords)
+    precipitationOverlay = ee.Image(datalist.get(0)).clip(geoArea)
+
+    #make map out of the overlay
+    make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
+    
+    
+
+#Ex 3) UNFINISHED   Train a model to make predictions based on the previous day only
+    width = 360
+    height = 360
+    batchsz = 32
+    
+    
+    #Load map data into numpy array for training
+    maps = get_precipitation_maps_for_range('1989-01-01', '2000-01-01', geoArea, imScale)
+
+    #Copy the data into input and expected output.  In this case its just a day's image for input, and the following day's image for expected output
+    inp = np.empty(shape = (maps.shape[2]-1, maps.shape[0], maps.shape[1], 1))
+    out = np.empty(shape = (maps.shape[2]-1, maps.shape[0], maps.shape[1],  1))
+    
+    
+    #Iterate over the data and create input and output arrays
+    samples = maps.shape[2]-1
+    for i in range(samples):
+        inp[i,:,:,0] = maps[:,:,i]
+        out[i,:,:,0] = maps[:,:,i+1]
+    
+    
+    print(inp.shape)
+    print(out.shape)
+    
+    #Normalize the data.  It is stored sequentially in a 4D array so all the dimensions except samples must be flattened and reshaped after normalization
+    norm_in = MinMaxScaler().fit(inp.reshape((samples,-1)))
+    inp = norm_in.transform(inp.reshape((samples,-1))).reshape(samples,width,height,1)
+    out = norm_in.transform(out.reshape((samples,-1))).reshape(samples,width,height,1)
+    
+    
+    #Create Tensorflow model based on an autoencoder for simple predictions
+    model = Model.getAutoEncoder((360, 360, 1))
+    model.compile(optimizer='adam', loss='binary_crossentropy')
+    
+    print(model.summary())
+    
+    #Fit the model to the data and save it
+    model.fit(inp, out, batch_size=batchsz, steps_per_epoch=(int)(samples/batchsz), epochs=300, max_queue_size = 1, shuffle = True)
+    model.save('AutoEncoder.model')
+
+
+#Ex: 4 Save entire CHIRPS DAILY dataset until 01/01/2021 in numpy file
+
+    #maps = get_precipitation_maps_for_range('1981-01-01', '2021-01-01', geoArea, imScale)
+    #maps.save("H:\\Datasets\\ChirpsDaily")
+
+
 
 
 
