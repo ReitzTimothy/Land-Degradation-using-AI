@@ -8,6 +8,7 @@ import tensorflow as tf
 import Model
 import sklearn
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
 
 #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
 #ee.Authenticate()
@@ -82,7 +83,6 @@ def get_total_precipitation_for_region(imlist, region, scale):
 def list_daily_precipitation_totals_for_year_range(startYear, endYear, region, scale):
     startDay = '01-01'
     endDay = '01-01'
-    
     output = np.empty([endYear-startYear, 365])
     
     for year in range(startYear, endYear):
@@ -137,18 +137,12 @@ def select_data(dataset,data):
     dataout = dataset.select(data)
     return dataout
 
-def viualize_data(dataset):
-    print("this is your code: ")
-    print(dataset)
+def save_years_of_data(num_Years,start_Year):
 
-
-
-
-    
-    
-
-
-
+    for i in range (0,num_Years):
+        precipVals = list_daily_precipitation_totals_for_year_range(start_Year , start_Year+1 , geoArea , imScale)
+        np.save(str(start_Year) + 'year' , precipVals)
+        start_Year+=1
 
 
 
@@ -164,15 +158,18 @@ def main():
 
 
     #Years to loop over and print data
-    startYear = 2000
-    endYear = 2002
+    startYear = 1993
+    endYear = 1993
+
 
     #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
     #print(precipVals)
 
+#Ex 1.5 Get data year by year and save it
 
+    save_years_of_data(2,startYear)
 
-
+'''
 #Ex 2) Displaying data on a folium map, in this case precipitation for a single day
 
     #get the data for a single day
@@ -185,13 +182,14 @@ def main():
     #make map out of the overlay
     make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
     
-    
+    #vizualize data
+    viualize_data(dataset)
 
 #Ex 3) UNFINISHED   Train a model to make predictions based on the previous day only
     width = 360
     height = 360
     batchsz = 32
-    
+ 
     
     #Load map data into numpy array for training
     maps = get_precipitation_maps_for_range('1989-01-01', '2000-01-01', geoArea, imScale)
@@ -230,13 +228,13 @@ def main():
 
 #Ex: 4 Save entire CHIRPS DAILY dataset until 01/01/2021 in numpy file
 
-    #maps = get_precipitation_maps_for_range('1981-01-01', '2021-01-01', geoArea, imScale)
-    #maps.save("H:\\Datasets\\ChirpsDaily")
+    maps = get_precipitation_maps_for_range('2000-01-01', '2005-01-01', geoArea, imScale)
+    maps.save("H:\\Datasets\\ChirpsDaily")
+'''
 
+#Ex 5 Get data year by year and save it
 
-
-
-
+    #save_years_of_data(2,1993)
 
 
 
