@@ -44,7 +44,6 @@ def add_ee_layer(self, eeImageObject, visParams, name):
 # Add EE drawing method to folium.
 folium.Map.add_ee_layer = add_ee_layer
 
-
 #create a folium map and save it to the same directory as the script
 def make_map_from_image(filename, imageOverlay, layerName, startLoc, startZoom):
     #Create a folium map centered on Columbia
@@ -65,7 +64,6 @@ def make_map_from_image(filename, imageOverlay, layerName, startLoc, startZoom):
 
     #Save the map to an HTML file 
     m.save(filename+".html")
-
 
 #Iterate over images in a list and output a numpy array of total precipitation in a specified region
 def get_total_precipitation_for_region(imlist, region, scale):
@@ -194,7 +192,7 @@ def main():
     
     
     #Load map data into numpy array for training
-    maps = get_precipitation_maps_for_range('1989-01-01', '2000-01-01', geoArea, imScale)
+    maps = get_precipitation_maps_for_range('1989-01-01', '1990-01-01', geoArea, imScale)
 
     #Copy the data into input and expected output.  In this case its just a day's image for input, and the following day's image for expected output
     inp = np.empty(shape = (maps.shape[2]-1, maps.shape[0], maps.shape[1], 1))
@@ -224,14 +222,14 @@ def main():
     print(model.summary())
     
     #Fit the model to the data and save it
-    model.fit(inp, out, batch_size=batchsz, steps_per_epoch=(int)(samples/batchsz), epochs=300, max_queue_size = 1, shuffle = True)
-    model.save('AutoEncoder.model')
+    model.fit(inp, out, batch_size=batchsz, steps_per_epoch=(int)(samples/batchsz), epochs=30, max_queue_size = 1, shuffle = True)
+    #model.save('AutoEncoder.model')
 
 
 #Ex: 4 Save entire CHIRPS DAILY dataset until 01/01/2021 in numpy file
 
-    #maps = get_precipitation_maps_for_range('1981-01-01', '2021-01-01', geoArea, imScale)
-    #maps.save("H:\\Datasets\\ChirpsDaily")
+    maps = get_precipitation_maps_for_range('1981-01-01', '2021-01-01', geoArea, imScale)
+    np.save("H:\\Datasets\\ChirpsDaily", maps)
 
 
 
