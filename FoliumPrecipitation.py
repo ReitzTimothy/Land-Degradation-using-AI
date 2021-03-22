@@ -4,10 +4,10 @@ import folium
 import numpy as np
 import geemap
 import pandas as pd
-import tensorflow as tf
-import Model
+import DataProcessing
 import sklearn
 from sklearn.preprocessing import MinMaxScaler
+import os
 
 #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
 #ee.Authenticate()
@@ -19,7 +19,7 @@ ee.Initialize()
 
 #Geographic area to use for rectangular input
 geoArea = ee.Geometry.Rectangle(-80,13,-62,-5)
-#Scale to use when converting earth engine data into pixels (may be CHIRPS specific, IDK)
+#Scale to use when converting earth engine data into pixels
 imScale = 200
 
 
@@ -143,36 +143,20 @@ def viualize_data(dataset):
 
 
     
-    
 
-
-
-
-
-
-def main():
-
-
-    
-
-        
-    
-    
+#Examples   
+ 
 #Ex 1) Total up precipitation across the region and print it
+def ex1():
 
-
-    #Years to loop over and print data
     startYear = 2000
     endYear = 2002
 
-    #precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
-    #print(precipVals)
-
-
-
+    precipVals = list_daily_precipitation_totals_for_year_range(startYear, endYear, geoArea, imScale)
+    print(precipVals)
 
 #Ex 2) Displaying data on a folium map, in this case precipitation for a single day
-
+def ex2():
     #get the data for a single day
     dataset = get_dataset('1989-02-01','1989-02-02')
     datalist = dataset.toList(dataset.size())
@@ -182,22 +166,26 @@ def main():
 
     #make map out of the overlay
     make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
-    
-    
 
-#Ex 3) UNFINISHED   Train a model to make predictions based on the previous day only
+#Ex 3) Train a model to make predictions based on the previous day only loading data from earth engine
+def ex3():
+    import tensorflow as tf
+    import Model
+
     width = 360
     height = 360
     batchsz = 32
     
     
-    #Load map data into numpy array for training
+    #Load map data into numpy array for training. 
     maps = get_precipitation_maps_for_range('1989-01-01', '1990-01-01', geoArea, imScale)
+    print("dataset loaded to memory shape ", maps.shape)
+
+
 
     #Copy the data into input and expected output.  In this case its just a day's image for input, and the following day's image for expected output
     inp = np.empty(shape = (maps.shape[2]-1, maps.shape[0], maps.shape[1], 1))
     out = np.empty(shape = (maps.shape[2]-1, maps.shape[0], maps.shape[1],  1))
-    
     
     #Iterate over the data and create input and output arrays
     samples = maps.shape[2]-1
@@ -223,13 +211,93 @@ def main():
     
     #Fit the model to the data and save it
     model.fit(inp, out, batch_size=batchsz, steps_per_epoch=(int)(samples/batchsz), epochs=30, max_queue_size = 1, shuffle = True)
-    #model.save('AutoEncoder.model')
+    model.save('AutoEncoder.model')
 
-
-#Ex: 4 Save entire CHIRPS DAILY dataset until 01/01/2021 in numpy file
-
+#Ex 4) Save entire CHIRPS DAILY dataset until 01/01/2021 in numpy file
+def ex4():
     maps = get_precipitation_maps_for_range('1981-01-01', '2021-01-01', geoArea, imScale)
-    np.save("H:\\Datasets\\ChirpsDaily", maps)
+    np.save("H:\\Datasets\\ChirpsDaily\\ChirpsDaily", maps)
+
+#Ex 5) Load the numpy file for dataset, normalize, and split it into batches for training.  Then save batched and normalized data to folder
+def ex5():
+    fp = "H:\\Datasets\\ChirpsDaily"
+    maps = np.load(fp+"\\ChirpsDaily.npy")
+    width = 360
+    height = 360
+    
+
+    norm_in = MinMaxScaler().fit(maps.reshape((maps.shape[2],-1)))
+    maps = norm_in.transform(maps.reshape((maps.shape[2],-1))).reshape(width,height, maps.shape[2])
+    print(maps[:,:,0])
+    
+    
+    num_batches = int((maps.shape[2]-1)/64)
+    print(num_batches)
+    for b in range(num_batches):
+        print(b)
+        inp = np.empty(shape = (64, maps.shape[0], maps.shape[1], 1))
+        out = np.empty(shape = (64, maps.shape[0], maps.shape[1],  1))
+        for i in range(64):
+            inp[i,:,:,0] = maps[:,:,b*64+i]
+            out[i,:,:,0] = maps[:,:,b*64+i+1]
+        
+        np.save(fp+"\\PreBatched\\input"+str(b), inp)
+        np.save(fp+"\\PreBatched\\output"+str(b), out)
+    test = np.load(fp+"\\PreBatched\\input0.npy")
+    print(test.shape)
+    
+#Ex 6) Train autoencoder model on pre batched numpy files
+def ex6():
+    import tensorflow as tf
+    import Model
+    
+    epochs = 5
+
+    data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
+    batch_count = int(len(os.listdir(data_path))/2)
+    print(batch_count)
+    
+    model = Model.getAutoEncoder((360, 360, 1))
+    model.compile(optimizer='adam', loss='binary_crossentropy')
+    
+    for e in range(epochs):
+        print("Epoch "+str(e))
+        for b in range(batch_count):
+            inp = np.load("H:\\Datasets\\ChirpsDaily\\PreBatched\\"+"input"+str(b)+".npy")
+            out = np.load("H:\\Datasets\\ChirpsDaily\\PreBatched\\"+"output"+str(b)+".npy")
+            
+            if b %(batch_count/8) == 0:
+                print(model.train_on_batch(inp, out, return_dict = True))
+            else:
+                model.train_on_batch(inp, out, return_dict = True)
+    #Note that the values that will be printed out are not the overall loss for the epoch, rather they are the loss for that specific batch.  So it will fluctuate a bit as it finds batches that it performs better or worse on    
+        
+    model.save('AutoEncoder.model')
+
+def main():
+    ex6()
+
+    
+
+        
+    
+    
+
+
+
+
+
+
+    
+    
+
+
+    
+    
+    
+
+
+
 
 
 
