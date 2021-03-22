@@ -14,7 +14,7 @@ def graphyears(number_of_years,start_year,dates):
 
     Months = ['January','March','May','July','September','November','January']
     labels=[]
-    ax = plt.subplots(figsize=(40,4))
+    fig,ax = plt.subplots(figsize=(40,4))
     for counter in range(0,number_of_years):
         data=read_data(str(start_year)+'year.npy')
         labels.append(str(start_year))
