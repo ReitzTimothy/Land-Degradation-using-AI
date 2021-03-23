@@ -8,6 +8,7 @@ import DataProcessing
 import sklearn
 from sklearn.preprocessing import MinMaxScaler
 import os
+import matplotlib.pyplot as plt
 
 #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
 #ee.Authenticate()
@@ -127,6 +128,39 @@ def get_precipitation_maps_for_range(startDate, endDate, geoArea, scale):
     print("Done")
     return output
 
+#Save entire CHIRPS DAILY dataset within date range in numpy file
+def download_data_as_nparray(start_date, end_date, filename):
+    maps = get_precipitation_maps_for_range(start_date, end_date, geoArea, imScale)
+    np.save("H:\\Datasets\\ChirpsDaily\\"+filename, maps)
+
+#Load the numpy file for dataset, normalize, and split it into batches for training.  Then save batched and normalized data to folder
+def batch_numpy_file_to_folder(input_filename, save_folder_name, batch_size):
+    fp = "H:\\Datasets\\ChirpsDaily"
+    maps = np.load(fp+"\\"+input_filename)
+    width = 360
+    height = 360
+    
+
+    norm_in = MinMaxScaler().fit(maps.reshape((maps.shape[2],-1)))
+    maps = norm_in.transform(maps.reshape((maps.shape[2],-1))).reshape(width,height, maps.shape[2])
+    print(maps[:,:,0])
+    
+    
+    num_batches = int((maps.shape[2]-1)/batch_size)
+    print(num_batches)
+    for b in range(num_batches):
+        print(b)
+        inp = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1], 1))
+        out = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1],  1))
+        for i in range(batch_size):
+            inp[i,:,:,0] = maps[:,:,b*batch_size+i]
+            out[i,:,:,0] = maps[:,:,b*batch_size+i+1]
+        
+        np.save(fp+"\\PreBatched\\"+save_folder_name+"\\input"+str(b), inp)
+        np.save(fp+"\\PreBatched\\"+save_folder_name+"\\output"+str(b), out)
+    test = np.load(fp+"\\PreBatched\\"+save_folder_name+"\\input0.npy")
+    print(test.shape)
+
 def get_dataset(startDate,endDate):
     dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate , endDate))
     return dataset
@@ -167,7 +201,7 @@ def ex2():
     #make map out of the overlay
     make_map_from_image("map", precipitationOverlay, "Precipitation", [4.1156735, -72.9301367], 5)
 
-#Ex 3) Train a model to make predictions based on the previous day only loading data from earth engine
+#Ex 3) Load data from api and train a model to make predictions based on the previous day only.  Requires no local files but takes a long time and is limited by RAM capacity
 def ex3():
     import tensorflow as tf
     import Model
@@ -212,42 +246,9 @@ def ex3():
     #Fit the model to the data and save it
     model.fit(inp, out, batch_size=batchsz, steps_per_epoch=(int)(samples/batchsz), epochs=30, max_queue_size = 1, shuffle = True)
     model.save('AutoEncoder.model')
-
-#Ex 4) Save entire CHIRPS DAILY dataset until 01/01/2021 in numpy file
+    
+#Ex 4) Train single day autoencoder model on pre batched numpy files
 def ex4():
-    maps = get_precipitation_maps_for_range('1981-01-01', '2021-01-01', geoArea, imScale)
-    np.save("H:\\Datasets\\ChirpsDaily\\ChirpsDaily", maps)
-
-#Ex 5) Load the numpy file for dataset, normalize, and split it into batches for training.  Then save batched and normalized data to folder
-def ex5():
-    fp = "H:\\Datasets\\ChirpsDaily"
-    maps = np.load(fp+"\\ChirpsDaily.npy")
-    width = 360
-    height = 360
-    
-
-    norm_in = MinMaxScaler().fit(maps.reshape((maps.shape[2],-1)))
-    maps = norm_in.transform(maps.reshape((maps.shape[2],-1))).reshape(width,height, maps.shape[2])
-    print(maps[:,:,0])
-    
-    
-    num_batches = int((maps.shape[2]-1)/64)
-    print(num_batches)
-    for b in range(num_batches):
-        print(b)
-        inp = np.empty(shape = (64, maps.shape[0], maps.shape[1], 1))
-        out = np.empty(shape = (64, maps.shape[0], maps.shape[1],  1))
-        for i in range(64):
-            inp[i,:,:,0] = maps[:,:,b*64+i]
-            out[i,:,:,0] = maps[:,:,b*64+i+1]
-        
-        np.save(fp+"\\PreBatched\\input"+str(b), inp)
-        np.save(fp+"\\PreBatched\\output"+str(b), out)
-    test = np.load(fp+"\\PreBatched\\input0.npy")
-    print(test.shape)
-    
-#Ex 6) Train autoencoder model on pre batched numpy files
-def ex6():
     import tensorflow as tf
     import Model
     
@@ -263,8 +264,8 @@ def ex6():
     for e in range(epochs):
         print("Epoch "+str(e))
         for b in range(batch_count):
-            inp = np.load("H:\\Datasets\\ChirpsDaily\\PreBatched\\"+"input"+str(b)+".npy")
-            out = np.load("H:\\Datasets\\ChirpsDaily\\PreBatched\\"+"output"+str(b)+".npy")
+            inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
+            out = np.load(data_path+"Train\\"+"output"+str(b)+".npy")
             
             if b %(batch_count/8) == 0:
                 print(model.train_on_batch(inp, out, return_dict = True))
@@ -274,8 +275,34 @@ def ex6():
         
     model.save('AutoEncoder.model')
 
+
+#Ex 5) Load model and make a prediction from the test set
+def ex5(test_file_number):
+    import tensorflow.keras as keras
+
+    model = keras.models.load_model('AutoEncoder.model')
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
+    inp = np.load(data_path+"Test\\"+"input"+str(test_file_number)+".npy")
+    out = np.load(data_path+"Test\\"+"output"+str(test_file_number)+".npy")
+    
+    pred = model.predict_on_batch(inp)
+    f, im = plt.subplots(2,2)
+    im[0,0].set_title("Input Data")
+    im[0,0].imshow(inp[0,:,:,0])
+    im[1,1].set_title("Ground Truth")
+    im[1,1].imshow(out[0,:,:,0])
+    im[1,0].set_title("Next Day Prediction")
+    im[1,0].imshow(pred[0,:,:,0])
+    
+    plt.show()
+    
+
 def main():
-    ex6()
+    ex5(0)
+    ex5(1)
+    ex5(2)
+    
 
     
 
