@@ -1,3 +1,4 @@
+
 import ee
 import datetime
 import folium
@@ -169,10 +170,12 @@ def select_data(dataset,data):
     dataout = dataset.select(data)
     return dataout
 
-def viualize_data(dataset):
-    print("this is your code: ")
-    print(dataset)
+def save_years_of_data(num_Years,start_Year):
 
+    for i in range (0,num_Years):
+        precipVals = list_daily_precipitation_totals_for_year_range(start_Year , start_Year+1 , geoArea , imScale)
+        np.save(str(start_Year) + 'year' , precipVals)
+        start_Year+=1
 
 
 
@@ -302,59 +305,6 @@ def main():
     ex5(0)
     ex5(1)
     ex5(2)
-    
-
-    
-
-        
-    
-    
-
-
-
-
-
-
-    
-    
-
-
-    
-    
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#Things I still need to figure out
-    #How to make a smooth gradient color transition instead of color pallette
-    #How to load the background map in grayscale to avoid polluting the overlay with green from forested areas while keeping opacity
-
-
-
-
-
-
-#Example of date time conversion between earth engine and python formats
-# ee_date = ee.Date('2020-01-01')
-# py_date = datetime.datetime.utcfromtimestamp(ee_date.getInfo()['value']/1000.0)
-
-# py_date = datetime.datetime.utcnow()
-# ee_date = ee.Date(py_date)
 
 if __name__ == '__main__':
-    main()
+  main()
