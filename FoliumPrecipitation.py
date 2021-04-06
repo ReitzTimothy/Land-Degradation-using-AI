@@ -1,3 +1,4 @@
+
 import ee
 import datetime
 import folium
@@ -408,9 +409,7 @@ def main():
     ex7(1)
     ex7(2)
     ex7(3)
-    
-
-    
+       
 
         
     
@@ -446,21 +445,3 @@ def main():
 
 
 
-#Things I still need to figure out
-    #How to make a smooth gradient color transition instead of color pallette
-    #How to load the background map in grayscale to avoid polluting the overlay with green from forested areas while keeping opacity
-
-
-
-
-
-
-#Example of date time conversion between earth engine and python formats
-# ee_date = ee.Date('2020-01-01')
-# py_date = datetime.datetime.utcfromtimestamp(ee_date.getInfo()['value']/1000.0)
-
-# py_date = datetime.datetime.utcnow()
-# ee_date = ee.Date(py_date)
-
-if __name__ == '__main__':
-    main()
