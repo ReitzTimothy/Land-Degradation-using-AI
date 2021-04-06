@@ -135,7 +135,7 @@ def download_data_as_nparray(start_date, end_date, filename):
     np.save("H:\\Datasets\\ChirpsDaily\\"+filename, maps)
 
 #Load the numpy file for dataset, normalize, and split it into batches for training.  Then save batched and normalized data to folder
-def batch_numpy_file_to_folder(input_filename, save_folder_name, batch_size):
+def batch_numpy_file_to_folder(input_filename, save_folder, batch_size, sequence_length):
     fp = "H:\\Datasets\\ChirpsDaily"
     maps = np.load(fp+"\\"+input_filename)
     width = 360
@@ -147,20 +147,50 @@ def batch_numpy_file_to_folder(input_filename, save_folder_name, batch_size):
     print(maps[:,:,0])
     
     
-    num_batches = int((maps.shape[2]-1)/batch_size)
+    num_batches = int((maps.shape[2]-sequence_length)/batch_size)
     print(num_batches)
     for b in range(num_batches):
         print(b)
-        inp = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1], 1))
+        inp = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1], sequence_length))
         out = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1],  1))
         for i in range(batch_size):
-            inp[i,:,:,0] = maps[:,:,b*batch_size+i]
-            out[i,:,:,0] = maps[:,:,b*batch_size+i+1]
+            for s in range(sequence_length):
+                inp[i,:,:,s] = maps[:,:,b*batch_size+i+s]
+            out[i,:,:,0] = maps[:,:,b*batch_size+i+sequence_length]
         
-        np.save(fp+"\\PreBatched\\"+save_folder_name+"\\input"+str(b), inp)
-        np.save(fp+"\\PreBatched\\"+save_folder_name+"\\output"+str(b), out)
-    test = np.load(fp+"\\PreBatched\\"+save_folder_name+"\\input0.npy")
+        np.save(fp+save_folder+"\\input"+str(b), inp)
+        np.save(fp+save_folder+"\\output"+str(b), out)
+    test = np.load(fp+save_folder+"\\input0.npy")
     print(test.shape)
+    return norm_in
+    
+def batch_numpy_file_to_folder_with_normalizer(input_filename, save_folder, batch_size, sequence_length, normalizer):
+    fp = "H:\\Datasets\\ChirpsDaily"
+    maps = np.load(fp+"\\"+input_filename)
+    width = 360
+    height = 360
+    
+
+    maps = normalizer.transform(maps.reshape((maps.shape[2],-1))).reshape(width,height, maps.shape[2])
+    print(maps[:,:,0])
+    
+    
+    num_batches = int((maps.shape[2]-sequence_length)/batch_size)
+    print(num_batches)
+    for b in range(num_batches):
+        print(b)
+        inp = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1], sequence_length))
+        out = np.empty(shape = (batch_size, maps.shape[0], maps.shape[1],  1))
+        for i in range(batch_size):
+            for s in range(sequence_length):
+                inp[i,:,:,s] = maps[:,:,b*batch_size+i+s]
+            out[i,:,:,0] = maps[:,:,b*batch_size+i+sequence_length]
+        
+        np.save(fp+save_folder+"\\input"+str(b), inp)
+        np.save(fp+save_folder+"\\output"+str(b), out)
+    test = np.load(fp+save_folder+"\\input0.npy")
+    print(test.shape)
+    return normalizer
 
 def get_dataset(startDate,endDate):
     dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY').filter(ee.Filter.date(startDate , endDate))
@@ -170,12 +200,10 @@ def select_data(dataset,data):
     dataout = dataset.select(data)
     return dataout
 
-def save_years_of_data(num_Years,start_Year):
+def viualize_data(dataset):
+    print("this is your code: ")
+    print(dataset)
 
-    for i in range (0,num_Years):
-        precipVals = list_daily_precipitation_totals_for_year_range(start_Year , start_Year+1 , geoArea , imScale)
-        np.save(str(start_Year) + 'year' , precipVals)
-        start_Year+=1
 
 
 
@@ -255,14 +283,15 @@ def ex4():
     import tensorflow as tf
     import Model
     
-    epochs = 5
+    epochs = 3
 
     data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
-    batch_count = int(len(os.listdir(data_path))/2)
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
     print(batch_count)
     
-    model = Model.getAutoEncoder((360, 360, 1))
+    model = tf.keras.models.load_model('AutoEncoder.model') #Model.getAutoEncoder((360, 360, 1))
     model.compile(optimizer='adam', loss='binary_crossentropy')
+    print(model.summary())
     
     for e in range(epochs):
         print("Epoch "+str(e))
@@ -279,7 +308,7 @@ def ex4():
     model.save('AutoEncoder.model')
 
 
-#Ex 5) Load model and make a prediction from the test set
+#Ex 5) Load autoencoder model and make a prediction from the test set
 def ex5(test_file_number):
     import tensorflow.keras as keras
 
@@ -300,11 +329,119 @@ def ex5(test_file_number):
     
     plt.show()
     
+#Ex 6) Train sequential autoencoder model on pre batched files
+def ex6(sequence_length):
+    import tensorflow as tf
+    import Model
+    
+    epochs = 10
+    sequence_length = 5
+    
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
+    validation_batch_count = int(len(os.listdir(data_path+"Validation\\"))/2)
+    print(batch_count)
+    
+    model = tf.keras.models.load_model('SequentialAutoEncoder.model') #Model.getSequentialAutoEncoder((360, 360, sequence_length))
+    model.compile(optimizer='adam', loss='mse')
+    print(model.summary())
+    
+    for e in range(epochs):
+        print("Epoch "+str(e))
+        epoch_loss = 0;
+        validation_loss = 0;
+        for b in range(batch_count):
+            inputs = []
+            inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
+            for i in range(inp.shape[3]):
+                inputs.append(inp[:,:,:,i])
+            out = np.load(data_path+"Train\\"+"output"+str(b)+".npy")
+            batch_loss = model.train_on_batch(inputs, out, return_dict = False)
+            epoch_loss = epoch_loss+batch_loss
+            if b %(batch_count/8) == 0:
+                print("...")
+        for v in range(validation_batch_count):
+            split_inp = []
+            inp = np.load(data_path+"Validation\\"+"input"+str(v)+".npy")
+            for i in range(inp.shape[3]):
+                split_inp.append(inp[:,:,:,i])
+            o = np.load(data_path+"Validation\\"+"output"+str(v)+".npy")
+            v_loss = model.test_on_batch(split_inp, o, return_dict = False)
+            validation_loss = validation_loss+v_loss
+            
+        epoch_loss = epoch_loss/batch_count
+        validation_loss = validation_loss/validation_batch_count
+        print("validation loss "+str(validation_loss))
+        print("loss "+str(epoch_loss))
+        
+    model.save('SequentialAutoEncoder.model')
+
+#Ex 7) Load sequentialautoencoder model and make a prediction from the test set
+def ex7(test_file_number):
+    import tensorflow.keras as keras
+
+    model = keras.models.load_model('SequentialAutoEncoder.model')
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
+    inputs = []
+    inp = np.load(data_path+"Validation\\"+"input"+str(test_file_number)+".npy")
+    for i in range(inp.shape[3]):
+        inputs.append(inp[:,:,:,i])
+    out = np.load(data_path+"Validation\\"+"output"+str(test_file_number)+".npy")
+    
+    pred = model.predict_on_batch(inputs)
+    f, im = plt.subplots(7)
+    for i in range(inp.shape[3]):
+        im[i].set_title("Input Data"+str(i))
+        im[i].imshow(inp[0,:,:,i])
+    im[5].set_title("Next Day Prediction")
+    im[5].imshow(pred[0,:,:,0])
+    im[6].set_title("Ground Truth")
+    im[6].imshow(out[0,:,:,0])
+    
+    plt.show()
 
 def main():
-    ex5(0)
-    ex5(1)
-    ex5(2)
+    norm = batch_numpy_file_to_folder("ChirpsDaily.npy", "\\Sequential\\Train", 32, 5)
+    batch_numpy_file_to_folder_with_normalizer("ChirpsDaily2021.npy", "\\Sequential\\Validation", 1, 5, norm)
+    ex6(5)
+    ex7(1)
+    ex7(2)
+    ex7(3)
+       
 
-if __name__ == '__main__':
-  main()
+        
+    
+    
+
+
+
+
+
+
+    
+    
+
+
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
