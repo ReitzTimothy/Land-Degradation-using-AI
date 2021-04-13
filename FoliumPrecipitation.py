@@ -72,7 +72,7 @@ def get_total_precipitation_for_region(imlist, region, scale):
     listSize = imlist.length().getInfo()
     out = np.empty(shape=listSize)
     for i in range(listSize):
-        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.sum(), geometry = region, scale = scale, maxPixels = 1e9);
+        tot = ee.Image(imlist.get(i)).reduceRegion(reducer = ee.Reducer.sum(), geometry = region, scale = scale, maxPixels = 1e9)
         out[i] = (tot.getInfo()['precipitation'])
         if i%10 == 0:
             print("aggregating precipitation ",i,"/",listSize)
@@ -93,8 +93,8 @@ def list_daily_precipitation_totals_for_year_range(startYear, endYear, region, s
         endDate = str(year+1)+'-'+endDay
 
         #Get our dataset from earth engine and filter it on a date range
-        dataset = get_dataset(startDate, endDate);
-        precipitation = dataset.select('precipitation');
+        dataset = get_dataset(startDate, endDate)
+        precipitation = dataset.select('precipitation')
         
 
         #Convert the dataset into a list of earth engine image objects and get the first one from the list.  This is inefficient so use filter() when you can
@@ -349,8 +349,8 @@ def ex6(sequence_length):
     
     for e in range(epochs):
         print("Epoch "+str(e))
-        epoch_loss = 0;
-        validation_loss = 0;
+        epoch_loss = 0
+        validation_loss = 0
         for b in range(batch_count):
             inputs = []
             inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
