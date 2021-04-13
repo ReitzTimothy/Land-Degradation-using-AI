@@ -166,10 +166,8 @@ def main():
     number_of_years=int(input("Enter how many Years you want to graph: "))
     start_year=int(input('Please enter a starting year: '))
     graph_average_of_years(number_of_years,start_year)
-'''
     graphyears(number_of_years,start_year)
     graph_month_average(number_of_years,start_year)
-'''
 
 if __name__ == '__main__':
     main()
