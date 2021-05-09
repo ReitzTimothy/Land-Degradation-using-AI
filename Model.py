@@ -1,5 +1,6 @@
-from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, AveragePooling2D, UpSampling2D, Flatten, concatenate, Reshape, Dropout, LSTM, TimeDistributed, Concatenate, BatchNormalization
+from tensorflow.keras.layers import Input, Dense, Conv2D, MaxPooling2D, AveragePooling2D, UpSampling2D, Flatten, concatenate, Reshape, Dropout, LSTM, TimeDistributed, Concatenate, BatchNormalization, Lambda
 from tensorflow.keras.models import Model
+from tensorflow import keras
 
 def getAutoEncoder(input_shape):
 
@@ -118,26 +119,32 @@ def getSameDayAutoEncoder(input_shape):
     input_img = Input(shape=input_shape)
 
     # Conv1 #
-    x = Conv2D(filters = 16, kernel_size = (3, 3), activation='relu', padding='same')(input_img)
+    x = Conv2D(filters = 16, kernel_size = (3, 3), activation='selu', padding='same')(input_img)
     x = AveragePooling2D(pool_size = (2, 2), padding='same')(x)
     # Conv2 #
-    x = Conv2D(filters = 8, kernel_size = (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(filters = 8, kernel_size = (3, 3), activation='selu', padding='same')(x)
     x = AveragePooling2D(pool_size = (2, 2), padding='same')(x)
     # Conv 3 #
-    x = Conv2D(filters = 4, kernel_size = (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(filters = 4, kernel_size = (3, 3), activation='selu', padding='same')(x)
     encoded = AveragePooling2D(pool_size = (2, 2), padding='same')(x)
+    encoded = Flatten()(encoded)
+    encoded = Dense(1, activation = 'linear')(encoded)
+    encoded = BatchNormalization()(encoded)
+    
     
     encoder = Model(input_img, encoded)
     
     # DeConv1
-    decoder_input = Input(shape = (45,45,4))
-    x = Conv2D(4, (3, 3), activation='relu', padding='same')(decoder_input)
+    decoder_input = Input(shape = (1))
+    x = Dense(8100, activation = 'selu')(decoder_input)
+    x = Reshape((45,45,4))(x)
+    x = Conv2D(4, (3, 3), activation='selu', padding='same')(x)
     x = UpSampling2D((2, 2))(x)
     # DeConv2
-    x = Conv2D(8, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(8, (3, 3), activation='selu', padding='same')(x)
     x = UpSampling2D((2, 2))(x)
     # Deconv3
-    x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(16, (3, 3), activation='selu', padding='same')(x)
     x = UpSampling2D((2, 2))(x)
     decoded = Conv2D(1, (3, 3), activation='linear', padding='same')(x)
     
@@ -194,8 +201,12 @@ def getSequentialPreEncoded(input_shape):
 def getModel(input_shape):
     import tensorflow.keras as keras
     import numpy as np
+    
 
+    ae_latent_len = 16
+    
     encoder = keras.models.load_model('encoder.model')
+
     for layer in encoder.layers:
         layer.trainable = False
     decoder = keras.models.load_model('decoder.model')
@@ -205,7 +216,7 @@ def getModel(input_shape):
     #encoders for each input
     inp = Input(shape=input_shape)
     x = TimeDistributed(encoder)(inp)
-    x = Reshape((5,8100))(x)
+    x = Reshape((5,ae_latent_len))(x)
     
     date_encoding = Input(shape = (5,13))
     x = Concatenate(axis=2)([x,date_encoding])
@@ -215,58 +226,155 @@ def getModel(input_shape):
     
     output_len = 1
     regulariser = None
-    hidden_shape = [10,10,10,10,10]
+    hidden_shape = [10,20,30,40,50,60,70,80,90,100]
     ts_decoder_inputs = Input(shape=(output_len, 1))
 
-    ts_encoder_inputs = keras.layers.Input(shape=(5,8113))
-    # Create a list of RNN Cells, these are then concatenated into a single layer
-    # with the RNN layer.
-    ts_encoder_cells = []
-    for hidden_layers in hidden_shape:
-        ts_encoder_cells.append(keras.layers.GRUCell(hidden_layers,
-                                                  kernel_regularizer=regulariser,
-                                                  recurrent_regularizer=regulariser,
-                                                  bias_regularizer=regulariser))
+    # ts_encoder_inputs = keras.layers.Input(shape=(5,8113))
+    # # Create a list of RNN Cells, these are then concatenated into a single layer
+    # # with the RNN layer.
+    # ts_encoder_cells = []
+    # for hidden_layers in hidden_shape:
+        # ts_encoder_cells.append(keras.layers.GRUCell(hidden_layers,
+                                                  # kernel_regularizer=regulariser,
+                                                  # recurrent_regularizer=regulariser,
+                                                  # bias_regularizer=regulariser))
                                                   
-    ts_encoder = keras.layers.RNN(ts_encoder_cells, return_state=True)
+    # ts_encoder = keras.layers.RNN(ts_encoder_cells, return_state=True)
     
-    ts_encoder_outputs_and_states = ts_encoder(ts_encoder_inputs)
-    ts_encoder_states = ts_encoder_outputs_and_states[1:]
+    # ts_encoder_outputs_and_states = ts_encoder(ts_encoder_inputs)
+    # ts_encoder_states = ts_encoder_outputs_and_states[1:]
     
     
     
     
 
-    ts_decoder_cells = []
-    for hidden_neurons in hidden_shape:
-        ts_decoder_cells.append(keras.layers.GRUCell(hidden_neurons,
-                                                  kernel_regularizer=regulariser,
-                                                  recurrent_regularizer=regulariser,
-                                                  bias_regularizer=regulariser))
-    ts_decoder = keras.layers.RNN(ts_decoder_cells, return_sequences=True, return_state=True)
+    # ts_decoder_cells = []
+    # for hidden_layers in hidden_shape:
+        # ts_decoder_cells.append(keras.layers.GRUCell(hidden_layers,
+                                                  # kernel_regularizer=regulariser,
+                                                  # recurrent_regularizer=regulariser,
+                                                  # bias_regularizer=regulariser))
+    # ts_decoder = keras.layers.RNN(ts_decoder_cells, return_sequences=True, return_state=True)
     
-    ts_decoder_outputs_and_states = ts_decoder(ts_decoder_inputs, initial_state=ts_encoder_states)
-    ts_decoder_outputs = ts_decoder_outputs_and_states[0]
-    ts_decoder_outputs = BatchNormalization()(ts_decoder_outputs)
-    ts_decoder_dense = keras.layers.Dense(8100,
-                                       activation='linear',
-                                       kernel_regularizer=regulariser,
-                                       bias_regularizer=regulariser)
-    ts_decoder_outputs = ts_decoder_dense(ts_decoder_outputs)
-    tsed = keras.models.Model(inputs=[ts_encoder_inputs, ts_decoder_inputs], outputs=ts_decoder_outputs)
-    print(tsed.output_shape)
-    print(tsed.summary())     
-    x = tsed([x,ts_decoder_inputs])     
-         
-         
-    print(x.shape)     
-         
-         
-         
-    #x = Dense(units = 8100, activation = 'linear')(x)
-    x = Reshape((output_len, 45,45, 4))(x)
+    # ts_decoder_outputs_and_states = ts_decoder(ts_decoder_inputs, initial_state=ts_encoder_states)
+    # ts_decoder_outputs = ts_decoder_outputs_and_states[0]
+    # # #ts_decoder_outputs = BatchNormalization()(ts_decoder_outputs)
+    # # ts_decoder_dense = keras.layers.Dense(8100,
+                                       # # activation='linear',
+                                       # # kernel_regularizer=regulariser,
+                                       # # bias_regularizer=regulariser)
+    # # ts_decoder_outputs = ts_decoder_dense(ts_decoder_outputs)
+    
+    
+    # o = ts_decoder_outputs_and_states#BatchNormalization()(ts_encoder_outputs_and_states)
+    # tsed = keras.models.Model(inputs=[ts_encoder_inputs, ts_decoder_inputs], outputs=o[0])
+    # print(tsed.output_shape)
+    # print(tsed.summary())     
+    # x = tsed([x,ts_decoder_inputs])     
+    
+    x = keras.layers.LSTM(80, return_sequences = True)(x)
+    x = Flatten()(x)
+    x = Concatenate()([x,date_encoding[:,4,:]])
+    x = Dense(units = ae_latent_len, activation = 'linear')(x)
+    x = Reshape((output_len, ae_latent_len))(x)
     
     decoded = TimeDistributed(decoder)(x)
+    #decoded = BatchNormalization()(decoded)
     
     return Model([inp, ts_decoder_inputs, date_encoding], decoded)
+   
+def getModelWithVAE(input_shape, latent_size):
+    import tensorflow.keras as keras
+    import numpy as np
+    import VAE
+    vae = VAE.VAE()
     
+
+    
+    
+    #pre VAE way - encoder = keras.models.load_model('encoder.model')
+
+    encoder = vae.get_VAE((input_shape[1:]))[1]
+    e = keras.models.load_model('encoder.model', compile = False, custom_objects={'vae_sampling': vae.vae_sampling})
+    encoder.set_weights(e.get_weights())
+    e = None
+    
+    for layer in encoder.layers:
+        layer.trainable = False
+    decoder = keras.models.load_model('decoder.model')
+    for layer in decoder.layers:
+        layer.trainable = False
+    
+    ae_latent_len = latent_size
+    
+    #encoders for each input
+    inp = Input(shape=input_shape)
+    x = TimeDistributed(encoder)(inp)
+    x = Reshape((5,ae_latent_len))(x)
+    
+    date_encoding = Input(shape = (5,13))
+    x = Concatenate(axis=2)([x,date_encoding])
+    
+    
+    
+    
+    output_len = 1
+    regulariser = None
+    hidden_shape = [10,20,30,40,50,60,70,80,90,100]
+    #ts_decoder_inputs = Input(shape=(output_len, 1))
+
+    # ts_encoder_inputs = keras.layers.Input(shape=(5,8113))
+    # # Create a list of RNN Cells, these are then concatenated into a single layer
+    # # with the RNN layer.
+    # ts_encoder_cells = []
+    # for hidden_layers in hidden_shape:
+        # ts_encoder_cells.append(keras.layers.GRUCell(hidden_layers,
+                                                  # kernel_regularizer=regulariser,
+                                                  # recurrent_regularizer=regulariser,
+                                                  # bias_regularizer=regulariser))
+                                                  
+    # ts_encoder = keras.layers.RNN(ts_encoder_cells, return_state=True)
+    
+    # ts_encoder_outputs_and_states = ts_encoder(ts_encoder_inputs)
+    # ts_encoder_states = ts_encoder_outputs_and_states[1:]
+    
+    
+    
+    
+
+    # ts_decoder_cells = []
+    # for hidden_layers in hidden_shape:
+        # ts_decoder_cells.append(keras.layers.GRUCell(hidden_layers,
+                                                  # kernel_regularizer=regulariser,
+                                                  # recurrent_regularizer=regulariser,
+                                                  # bias_regularizer=regulariser))
+    # ts_decoder = keras.layers.RNN(ts_decoder_cells, return_sequences=True, return_state=True)
+    
+    # ts_decoder_outputs_and_states = ts_decoder(ts_decoder_inputs, initial_state=ts_encoder_states)
+    # ts_decoder_outputs = ts_decoder_outputs_and_states[0]
+    # # #ts_decoder_outputs = BatchNormalization()(ts_decoder_outputs)
+    # # ts_decoder_dense = keras.layers.Dense(8100,
+                                       # # activation='linear',
+                                       # # kernel_regularizer=regulariser,
+                                       # # bias_regularizer=regulariser)
+    # # ts_decoder_outputs = ts_decoder_dense(ts_decoder_outputs)
+    
+    
+    # o = ts_decoder_outputs_and_states#BatchNormalization()(ts_encoder_outputs_and_states)
+    # tsed = keras.models.Model(inputs=[ts_encoder_inputs, ts_decoder_inputs], outputs=o[0])
+    # print(tsed.output_shape)
+    # print(tsed.summary())     
+    # x = tsed([x,ts_decoder_inputs])     
+    
+    x = keras.layers.LSTM(1024, return_sequences = False)(x)
+    x = Flatten()(x)
+    x = Concatenate()([x,date_encoding[:,4,:]])
+    x = Dense(units = ae_latent_len, activation = 'linear')(x)
+    x = Reshape((output_len, ae_latent_len))(x)
+    
+    decoded = TimeDistributed(decoder)(x)
+    #decoded = BatchNormalization()(decoded)
+    
+    return Model([inp, date_encoding], decoded)
+   
+
