@@ -14,6 +14,7 @@ import tensorflow as tf
 import Model
 from tensorflow.keras.losses import Loss as Loss
 from datetime import date, timedelta
+import GANModel
 
 
 #Get an authentication token from google, do every time if running on the cloud, do first time only if running local
@@ -157,12 +158,11 @@ def batch_numpy_file_to_folder(input_filename, save_folder, batch_size, sequence
     for b in range(num_batches):
         print(b)
         inp = np.empty(shape = (batch_size, sequence_length, maps.shape[0], maps.shape[1]))
-        out = np.empty(shape = (batch_size, sequence_length, maps.shape[0], maps.shape[1]))
+        out = np.empty(shape = (batch_size, 1, maps.shape[0], maps.shape[1]))
         for i in range(batch_size):
             for s in range(sequence_length):
                 inp[i,s,:,:] = maps[:,:,b*batch_size+i+s]
-            for s in range(sequence_length):
-                out[i,s,:,:] = maps[:,:,b*batch_size+i+sequence_length+s]
+            out[i,0,:,:] = maps[:,:,b*batch_size+i+sequence_length+s]
         
         np.save(fp+save_folder+"\\input"+str(b), inp)
         np.save(fp+save_folder+"\\output"+str(b), out)
@@ -186,12 +186,11 @@ def batch_numpy_file_to_folder_with_normalizer(input_filename, save_folder, batc
     for b in range(num_batches-1):
         print(b)
         inp = np.empty(shape = (batch_size, sequence_length, maps.shape[0], maps.shape[1]))
-        out = np.empty(shape = (batch_size, sequence_length, maps.shape[0], maps.shape[1]))
+        out = np.empty(shape = (batch_size, 1, maps.shape[0], maps.shape[1]))
         for i in range(batch_size):
             for s in range(sequence_length):
                 inp[i,s,:,:] = maps[:,:,b*batch_size+i+s]
-            for s in range(sequence_length):
-                out[i,s,:,:] = maps[:,:,b*batch_size+i+sequence_length+s]
+            out[i,0,:,:] = maps[:,:,b*batch_size+i+sequence_length+s]
         
         np.save(fp+save_folder+"\\input"+str(b), inp)
         np.save(fp+save_folder+"\\output"+str(b), out)
@@ -301,13 +300,6 @@ def getDateVector(start_date, days, sequence_len, ):
             data[i,s,12] = date.year-start_date.year/40
     date = start_date+timedelta(days = days)
     return (data, date)
-
-
-
-
-
-
-
 
 
 
@@ -509,9 +501,8 @@ def ex7(test_file_number):
 def ex8():
     import tensorflow as tf
     import Model
-    import Losses
     
-    epochs = 15
+    epochs = 5
     zeros_frequency = 100
 
     data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
@@ -530,18 +521,18 @@ def ex8():
     
     for e in range(epochs):
         print("Epoch "+str(e))
+        tot_loss = 0;
         for b in range(batch_count):
             inp = np.reshape(np.load(data_path+"Train\\"+"input"+str(b)+".npy"), (-1,360,360,1))
             out = np.reshape(np.load(data_path+"Train\\"+"input"+str(b)+".npy"), (-1,360,360,1))
             
             if(b%zeros_frequency == 0):
                 print(str(model.train_on_batch(zeros, zeros, return_dict = True)) +" on noise")
+            tot_loss = tot_loss + model.train_on_batch(inp, out, return_dict = False)
             if b %(batch_count/8) == 0:
-                print(model.train_on_batch(inp, out, return_dict = True))
-            else:
-                model.train_on_batch(inp, out, return_dict = True)
+                print(tot_loss)
     #Note that the values that will be printed out are not the overall loss for the epoch, rather they are the loss for that specific batch.  So it will fluctuate a bit as it finds batches that it performs better or worse on    
-        
+        print(tot_loss)
     model.save('SameDayAutoEncoder.model')
     ensemble[1].save('encoder.model')
     ensemble[2].save('decoder.model')
@@ -644,22 +635,23 @@ class CustomLoss(Loss):
     @tf.function
     def call(self, y_true, y_pred):
         y_pred = tf.squeeze(y_pred)
-        diff = y_true-y_pred
-        #add on a multiple of absolute error
-        loss = keras.backend.abs(diff)+keras.backend.square(diff)
-        
-        # multiplying the values with weights along batch dimension
-        #loss = tf.math.multiply(loss, tf.reshape([1, 0.08, 0.06, 0.04, 0.02], (1,5,1,1)))       
-                    
-        # summing both loss values along batch dimension 
-        loss = keras.backend.sum(loss, axis=1)        
-        return loss
+        diff = y_pred-y_true
+        loss = keras.backend.square(diff)+keras.backend.abs(diff)*100#keras.backend.abs(diff+tf.math.divide(diff, 2))
 
-#Ex 12) Load pre-encoded LSTM model and train the forecasting bottleneck
+        loss = keras.backend.min(loss, axis=0)+keras.backend.max(loss, axis=0)#keras.backend.sum(loss, axis=0)#      
+        return loss
+        
+class RMSE(Loss):
+    @tf.function
+    def call(self, y_true, y_pred):
+        diff = tf.squeeze(y_pred) - y_true
+        return keras.backend.sqrt(keras.backend.mean(keras.backend.square(diff)))
+
+#Ex 12) Load pre-encoded GRU model and train the forecasting bottleneck
 def ex12(sequence_length):
     loss = CustomLoss()
     keras.losses.loss = loss
-    epochs = 1
+    epochs = 2
     sequence_length = 5
     
     
@@ -676,7 +668,8 @@ def ex12(sequence_length):
     # model.set_weights(l.get_weights())
     # l = None
 
-    model.compile(optimizer='adam', loss=loss)
+
+    model.compile(optimizer='adam', loss='mae')
     print(model.summary())
     
     for e in range(epochs):
@@ -686,27 +679,31 @@ def ex12(sequence_length):
         train_date = date(1981,1,1)
         validation_date = date(2021,1,1)
         for b in range(batch_count):
+            batch_loss = 0;
             inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
             out = np.load(data_path+"Train\\"+"output"+str(b)+".npy")
             date_vec = getDateVector(train_date, inp.shape[0], sequence_length)
             train_date = date_vec[1]
             
-            batch_loss = model.train_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[0]], out[:,0,:,:], return_dict = False)
+            for bs in range(inp.shape[0]):
+                batch_loss = batch_loss+model.train_on_batch([inp[None,bs],np.zeros((1,1)), date_vec[0][None, bs]], out[None, bs,0,:,:], return_dict = False)
+            
+            #batch_loss = model.train_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[0]], out[:,0,:,:], return_dict = False)
             epoch_loss = epoch_loss+batch_loss
             if b %(batch_count/8) == 0:
-                print("..." )#+ str(batch_loss))
+                print("...")#+ str(batch_loss))
         for v in range(validation_batch_count):
             inp = np.load(data_path+"Validation\\"+"input"+str(v)+".npy")
             o = np.load(data_path+"Validation\\"+"output"+str(v)+".npy")
             date_vec = getDateVector(validation_date, inp.shape[0], sequence_length)
             validation_date = date_vec[1]
             
-            v_loss = model.test_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[0]], o[:,0,:,:], return_dict = False)
-            validation_loss = validation_loss+v_loss
+            #v_loss = model.test_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[None, 0]], o[:,0,:,:], return_dict = False)
+            #validation_loss = validation_loss+v_loss
             
         epoch_loss = epoch_loss/batch_count
-        validation_loss = validation_loss/validation_batch_count
-        print("validation loss "+str(validation_loss))
+        #validation_loss = validation_loss/validation_batch_count
+        #print("validation loss "+str(validation_loss))
         print("loss "+str(epoch_loss))
         
     model.save('MultiEncoder.model')
@@ -716,11 +713,11 @@ def ex13(test_file_number):
     validation_date = date(2021,1,1)+timedelta(days=test_file_number)
     loss = CustomLoss()
     keras.losses.loss = loss
-    model = keras.models.load_model('MultiEncoder.model', custom_objects={ 'CustomLoss': loss })
+    model = keras.models.load_model('MultiEncoder.model')
     
     data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
-    inp = np.load(data_path+"Validation\\"+"input"+str(test_file_number)+".npy")
-    out = np.load(data_path+"Validation\\"+"output"+str(test_file_number)+".npy")
+    inp = np.load(data_path+"Train\\"+"input"+str(test_file_number)+".npy")
+    out = np.load(data_path+"Train\\"+"output"+str(test_file_number)+".npy")
     
     date_vec = getDateVector(validation_date, inp.shape[0], 5)
     
@@ -737,22 +734,350 @@ def ex13(test_file_number):
     im[inp.shape[1]+1].imshow(out[0,0,:,:])
     plt.show()
 
-def main():
-    #norm = batch_numpy_file_to_folder("ChirpsDaily.npy", "\\Sequential\\Train", 32, 5)
-    #batch_numpy_file_to_folder_with_normalizer("ChirpsDaily2021.npy", "\\Sequential\\Validation", 1, 5, norm)
-    #generate_empty_data(64)
+#Ex 14) Make covariance matrix for all training data for autoencoder latent space
+def ex14():
+    import seaborn as sn
+
+    encoder = keras.models.load_model('encoder.model')
+    decoder = keras.models.load_model('decoder.model')
+    data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
+    latent = np.empty((0,1))
+        
+    for b in range(batch_count):
+        inp = np.reshape(np.load(data_path+"Train\\"+"input"+str(b)+".npy"), (-1,360,360,1))
+        l = encoder.predict_on_batch(inp)
+        latent = np.append(latent, l, axis = 0)
+            
+    cov_mat = np.cov(latent, rowvar = False)
+    sn.heatmap(cov_mat, annot=False, fmt='g')
+    plt.show()
+
+
+
+#Train variational autoencoder
+def ex15():
+    import tensorflow as tf
+    import VAE
+    vae = VAE.VAE()
     
-    #Train autoencoder
-    #ex8()
-    #ex9(0)
-    #ex9(15)
+    epochs = 5
+    zeros_frequency = 100
+
+    data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
+    
+    ensemble = vae.get_VAE((360,360,1))
+    
+    
+    model = ensemble[0] 
+    model.compile(optimizer='adam', loss=vae.vae_loss, metrics = [vae.vae_r_loss, vae.vae_kl_loss])
+    print(model.summary())
+    print(type(vae.mu))
+    
+    zeros = np.reshape(np.load(data_path+"EmptyData\\"+"empty.npy"), (-1,360,360,1))
+    zerout = np.empty(zeros.shape)
+    
+    for e in range(epochs):
+        print("Epoch "+str(e))
+        tot_loss = 0;
+        for b in range(batch_count):
+            inp = np.reshape(np.load(data_path+"Train\\"+"input"+str(b)+".npy"), (-1,360,360,1))
+            out = np.reshape(np.load(data_path+"Train\\"+"input"+str(b)+".npy"), (-1,360,360,1))
+            
+            if(b%zeros_frequency == 0):
+                print(str(model.train_on_batch(zeros, zeros, return_dict = True)) +" on noise")
+            tot_loss = tot_loss + model.train_on_batch(inp, out, return_dict = False)[0]
+            if b %(batch_count/8) == 0:
+                print(tot_loss)
+    #Note that the values that will be printed out are not the overall loss for the epoch, rather they are the loss for that specific batch.  So it will fluctuate a bit as it finds batches that it performs better or worse on    
+        print(tot_loss)
+    model.save('SameDayAutoEncoder.model')
+    ensemble[1].save('encoder.model')
+    ensemble[2].save('decoder.model')
+
+#Train multiencoder using VAE instead of regular autoencoder
+def ex16(sequence_length):
+    import VAE
+    vae = VAE.VAE()
+    
+    loss = RMSE()
+    keras.losses.loss = loss
+    epochs = 5
+    sequence_length = 5
+    
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
+    validation_batch_count = int(len(os.listdir(data_path+"Validation\\"))/2)
+    print(batch_count)
+    
+    
+    
+    model =  Model.getModelWithVAE((sequence_length, 360, 360, 1), 16)
+    
+    l = keras.models.load_model('MultiEncoder.model', compile = False, custom_objects={'vae_sampling': vae.vae_sampling})
+    model.set_weights(l.get_weights())
+    l = None
+
+
+    model.compile(optimizer='adadelta', loss=loss)
+    print(model.summary())
+    
+    for e in range(epochs):
+        print("Epoch "+str(e))
+        epoch_loss = 0;
+        validation_loss = 0;
+        train_date = date(1981,1,1)
+        validation_date = date(2021,1,1)
+        for b in range(batch_count):
+            batch_loss = 0;
+            inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
+            out = np.load(data_path+"Train\\"+"output"+str(b)+".npy")
+            date_vec = getDateVector(train_date, inp.shape[0], sequence_length)
+            train_date = date_vec[1]
+            
+            for bs in range(inp.shape[0]):
+                batch_loss = batch_loss+model.train_on_batch([inp[None,bs],np.zeros((1,1)), date_vec[0][None, bs]], out[None, bs,0,:,:], return_dict = False)
+            
+            #batch_loss = model.train_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[0]], out[:,0,:,:], return_dict = False)
+            epoch_loss = epoch_loss+batch_loss
+            if b %(batch_count/8) == 0:
+                print("...")#+ str(batch_loss))
+        for v in range(validation_batch_count):
+            inp = np.load(data_path+"Validation\\"+"input"+str(v)+".npy")
+            o = np.load(data_path+"Validation\\"+"output"+str(v)+".npy")
+            date_vec = getDateVector(validation_date, inp.shape[0], sequence_length)
+            validation_date = date_vec[1]
+            
+            #v_loss = model.test_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[None, 0]], o[:,0,:,:], return_dict = False)
+            #validation_loss = validation_loss+v_loss
+            
+        epoch_loss = epoch_loss/batch_count
+        #validation_loss = validation_loss/validation_batch_count
+        #print("validation loss "+str(validation_loss))
+        print("loss "+str(epoch_loss))
+        
+    model.save('MultiEncoder.model')
+
+#predict with VAE encoder
+def ex17(test_file_number):
+    import VAE
+    vae = VAE.VAE()
+    validation_date = date(2021,1,1)+timedelta(days=test_file_number)
+    loss = RMSE()
+    keras.losses.loss = loss
+    model = keras.models.load_model('MultiEncoder.model', custom_objects={'vae_sampling': vae.vae_sampling, 'RMSE': RMSE})
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
+    inp = np.load(data_path+"Train\\"+"input"+str(test_file_number)+".npy")
+    out = np.load(data_path+"Train\\"+"output"+str(test_file_number)+".npy")
+    
+    date_vec = getDateVector(validation_date, inp.shape[0], 5)
+    
+    pred = model.predict_on_batch([inp,np.zeros((inp.shape[0],1)), date_vec[0]])
+    f, im = plt.subplots(1,inp.shape[1]+2)
+    
+    
+    for i in range(inp.shape[1]):
+        im[i].set_title("Input Data"+str(i))
+        im[i].imshow(inp[0,i,:,:])
+    im[inp.shape[1]].set_title("Prediction")
+    im[inp.shape[1]].imshow(pred[0,0,:,:])
+    im[inp.shape[1]+1].set_title("Ground Truth")
+    im[inp.shape[1]+1].imshow(out[0,0,:,:])
+    plt.show()
+
+#Ex 18) Make covariance matrix for all training data for autoencoder latent space
+def ex18():
+    import seaborn as sn
+    import VAE
+    vae = VAE.VAE()
+
+    encoder = keras.models.load_model('encoder.model', custom_objects={'vae_sampling': vae.vae_sampling})
+    decoder = keras.models.load_model('decoder.model')
+    data_path = "H:\\Datasets\\ChirpsDaily\\PreBatched\\"
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
+    latent = np.empty((0,16))
+        
+    for b in range(batch_count):
+        inp = np.reshape(np.load(data_path+"Train\\"+"input"+str(b)+".npy"), (-1,360,360,1))
+        l = encoder.predict_on_batch(inp)
+        latent = np.append(latent, l, axis = 0)
+            
+    cov_mat = np.cov(latent, rowvar = False)
+    sn.heatmap(cov_mat, annot=True, fmt='g')
+    plt.show()
+
+
+losses = []
+critic_losses = []
+#Ex 19) Train prediction model with a discriminator
+def ex19(sequence_length):
+    import VAE
+    import Critic
+    
+    optimizer = tf.keras.optimizers.Adadelta(learning_rate=0.1)
+    critic_optimizer = tf.keras.optimizers.Adadelta(learning_rate=0.1)
+    latent_size = 32
+    
+    vae = VAE.VAE() #Just need the VAE to use its lambda function
+    critic = Critic.Critic((latent_size))
+    
+    #load encoder for generating critic data
+    encoder = vae.get_VAE((360, 360, 1))[1]
+    e = keras.models.load_model('encoder.model', compile = False, custom_objects={'vae_sampling': vae.vae_sampling})
+    encoder.set_weights(e.get_weights())
+    e = None
+    
+    epochs = 5
+    sequence_length = 5
+    
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
+    batch_count = int(len(os.listdir(data_path+"Train\\"))/2)
+    validation_batch_count = int(len(os.listdir(data_path+"Validation\\"))/2)
+    print(batch_count)
+    
+    model = GANModel.getGANModel((sequence_length, 360, 360, 1), latent_size)
+    
+    # l = keras.models.load_model('gan.model', compile = False, custom_objects={'vae_sampling': vae.vae_sampling})
+    # model.set_weights(l.get_weights())
+    # l = None
+    # c = keras.models.load_model('critic.model', compile = False)
+    # critic.model.set_weights(c.get_weights())
+    # c = None
+
+    critic.model.compile(optimizer=critic_optimizer, loss='binary_crossentropy')
+    model.compile(optimizer=optimizer, loss=model.gan_loss, metrics = [])
+    print(model.summary())
+    
+    for e in range(epochs):
+        print("Epoch "+str(e))
+        
+        epoch_loss = 0;
+        validation_loss = 0;
+        train_date = date(1981,1,1)
+        validation_date = date(2021,1,1)
+        
+        #train critic/discriminator
+        
+        for b in range(batch_count):
+        
+            for layer in critic.model.layers:
+                layer.trainable = True
+            
+            inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
+        
+            date_info = getDateVector(train_date, inp.shape[0], sequence_length)
+            train_date = date_info[1]
+            
+            generated_data = model.predict_on_batch([inp, date_info[0]])[1]
+            real = np.load(data_path+"Train\\"+"output"+str(b)+".npy")
+            real_data = encoder.predict_on_batch(real[:,0,:,:])
+            critic_batch_loss = critic.train_critic_on_batch(generated_data, real_data)
+            critic_losses.append(critic_batch_loss)
+            if b %(batch_count/8) == 0:
+                print("Critic Loss "+str(critic_batch_loss))
+        
+            for layer in critic.model.layers:
+                layer.trainable = False
+            model.set_critic(critic.model)
+    
+    
+    
+    
+        
+        
+            batch_loss = 0;
+            inp = np.load(data_path+"Train\\"+"input"+str(b)+".npy")
+            out = np.load(data_path+"Train\\"+"output"+str(b)+".npy")
+            
+            #stochastic gradient descent
+            for bs in range(inp.shape[0]):
+                l = model.train_on_batch([inp[None,bs], date_info[0][None, bs]], [out[None, bs,0,:,:], np.zeros(shape = (1))], return_dict = False)
+                batch_loss = batch_loss+l[0]
+            losses.append(batch_loss)
+            
+            #batch_loss = model.train_on_batch([inp, date_info[0]], out[:,0,:,:], return_dict = False)
+            epoch_loss = epoch_loss+batch_loss
+            if b %(batch_count/8) == 0:
+                print("...")#+ str(batch_loss))
+        for v in range(validation_batch_count):
+            inp = np.load(data_path+"Validation\\"+"input"+str(v)+".npy")
+            o = np.load(data_path+"Validation\\"+"output"+str(v)+".npy")
+            date_info = getDateVector(validation_date, inp.shape[0], sequence_length)
+            validation_date = date_info[1]
+            
+            #v_loss = model.test_on_batch([inp,np.zeros((inp.shape[0],1)), date_info[None, 0]], o[:,0,:,:], return_dict = False)
+            #validation_loss = validation_loss+v_loss
+            
+        epoch_loss = epoch_loss/batch_count
+        #validation_loss = validation_loss/validation_batch_count
+        #print("validation loss "+str(validation_loss))
+        print("loss "+str(epoch_loss))
+        
+    model.save('gan.model')
+    critic.model.save('critic.model')
+    plt.plot(losses)
+    plt.plot(critic_losses)
+    plt.show()
+
+#predict with gan
+def ex20(test_file_number):
+    import VAE
+    vae = VAE.VAE()
+    validation_date = date(2021,1,1)+timedelta(days=test_file_number)
+
+    model = keras.models.load_model('gan.model', custom_objects={'vae_sampling': vae.vae_sampling, 'gan_loss': None})
+    encoder = keras.models.load_model('encoder.model', custom_objects={'vae_sampling': vae.vae_sampling})
+    
+    data_path = "H:\\Datasets\\ChirpsDaily\\Sequential\\"
+    inp = np.load(data_path+"Train\\"+"input"+str(test_file_number)+".npy")
+    out = np.load(data_path+"Train\\"+"output"+str(test_file_number)+".npy")
+    
+    date_vec = getDateVector(validation_date, inp.shape[0], 5)
+    
+    p = model.predict_on_batch([inp, date_vec[0]])
+    enc = encoder.predict_on_batch(out[:,0,:,:])
+    pred = p[0]
+    lat_vec = p[1]
+    print(p[1])
+    print(enc)
+    print("")
+    f, im = plt.subplots(1,inp.shape[1]+2)
+    
+    
+    for i in range(inp.shape[1]):
+        im[i].set_title("Input Data"+str(i))
+        im[i].imshow(inp[0,i,:,:])
+    im[inp.shape[1]].set_title("Prediction")
+    im[inp.shape[1]].imshow(pred[0,0,:,:])
+    im[inp.shape[1]+1].set_title("Ground Truth")
+    im[inp.shape[1]+1].imshow(out[0,0,:,:])
+    plt.show()
+    
+    
+
+def main():
+    # norm = batch_numpy_file_to_folder("ChirpsDaily.npy", "\\Sequential\\Train", 32, 5)
+    # batch_numpy_file_to_folder_with_normalizer("ChirpsDaily2021.npy", "\\Sequential\\Validation", 1, 5, norm)
+    # generate_empty_data(64)
+    
+    #Train variational autoencoder
+    # ex15()
+    # ex9(0)
+    # ex9(15)
+    # ex9(30)
+    # ex9(45)
     
     #Train Latent Predictor
-    ex12(5)
-    ex13(0)
-    ex13(10)
-    ex13(20)
-    ex13(30)
+    ex19(5)
+    ex20(0)
+    ex20(32)
+    ex20(64)
+    ex20(96)
+    ex20(97)
     
     #Calculate and visualize dataset analysis
     # stats = get_data_stats()
@@ -763,7 +1088,9 @@ def main():
     # splits = get_split_stdevs_on_data(40)
     # visualize_splits_vs_avg(splits, stats[1],10,4)
     
-
+    #VAE analysis
+    # ex18()
+    
     
 
         
@@ -800,7 +1127,7 @@ def main():
 
 
 
-#Things I still need to figure out
+#Things I still need to figure out with foluium
     #How to make a smooth gradient color transition instead of color pallette
     #How to load the background map in grayscale to avoid polluting the overlay with green from forested areas while keeping opacity
 
